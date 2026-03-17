@@ -1,0 +1,10 @@
+@if (calculatorService.showResults()) {
+  <app-results-dashboard />
+} @else {
+  <div class="calculator-wrapper">
+    <app-header />
+    <div class="calculator-body">
+      <app-stepper />
+    </div>
+  </div>
+}

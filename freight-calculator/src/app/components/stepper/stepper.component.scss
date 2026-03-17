@@ -1,0 +1,64 @@
+.stepper {
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background: var(--navy-dark);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: var(--navy);
+  }
+}
+
+.step-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--orange);
+}
+
+.step-arrows {
+  display: flex;
+  gap: 4px;
+
+  .material-icons {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 20px;
+  }
+}
+
+.step-content {
+  background: #fff;
+  padding: 32px;
+  animation: slideDown 0.3s ease;
+}
+
+.step.active .step-header {
+  background: var(--navy-dark);
+  border-left: 3px solid var(--orange);
+}
+
+.step.completed .step-header {
+  background: var(--navy-dark);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

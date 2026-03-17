@@ -1,0 +1,251 @@
+<div class="dashboard">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-left">
+      <img src="assets/logo.webp" alt="CJ Darcl Logistics" class="header-logo" />
+      <h1 class="header-title">Carbon emissions calculator</h1>
+    </div>
+  </div>
+
+  <div class="dashboard-body">
+    <!-- Left Sidebar -->
+    <aside class="sidebar" [class.collapsed]="sidebarCollapsed">
+      <div class="sidebar-top">
+        <button class="restart-btn" (click)="onRestart()">
+          <span class="material-icons">refresh</span>
+          @if (!sidebarCollapsed) { <span>Restart</span> }
+        </button>
+        <button class="collapse-btn" (click)="toggleSidebar()">
+          <span class="material-icons">{{ sidebarCollapsed ? 'menu' : 'menu_open' }}</span>
+        </button>
+      </div>
+
+      <!-- Shipment Details (commented out)
+      <div class="sidebar-section">
+        <div class="section-header">
+          <h3>Shipment details</h3>
+          <span class="material-icons edit-icon">edit</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-row">
+            <span class="detail-label">Cargo</span>
+            <span class="detail-value">{{ shipmentData().cargo.amount }} {{ shipmentData().cargo.unit }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Cargo type</span>
+            <span class="detail-value">Average</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Shipment date:</span>
+            <span class="detail-value">Now</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Auto-routing</span>
+            <span class="detail-value">Off</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Auto-transshipment</span>
+            <span class="detail-value">Off</span>
+          </div>
+        </div>
+      </div>
+      -->
+
+      <!-- Route -->
+      <div class="sidebar-section">
+        <h3>Route</h3>
+        <p class="route-desc">Route of the shipment. Origin and destination or transport distance</p>
+
+        <div class="route-timeline">
+          <!-- Origin -->
+          <div class="timeline-item origin">
+            <div class="timeline-dot origin-dot"></div>
+            <div class="timeline-content">
+              <div class="timeline-row">
+                <span>Origin</span>
+                <span class="total-distance">Total: {{ formatNumber(totalDistance) }} km</span>
+              </div>
+            </div>  
+          </div>
+
+          <div class="timeline-line"></div>
+
+          <!-- Legs -->
+          @for (leg of legs(); track leg.id) {
+            <div class="timeline-item leg">
+              <div class="timeline-dot leg-dot">
+                <span class="material-icons leg-icon">{{ getModeIcon(leg.mode.type) }}</span>
+              </div>
+              <div class="timeline-content">
+                @if (leg.editing) {
+                  <!-- Editing mode: inline form -->
+                  <div class="leg-edit-form">
+                    <div class="leg-form-group">
+                      <select
+                        class="leg-select mode-select"
+                        [ngModel]="leg.mode.type"
+                        (ngModelChange)="onLegModeChange(leg, $event)"
+                      >
+                        @for (mode of calculatorService.transportModes; track mode.type) {
+                          <option [value]="mode.type">{{ mode.type }}</option>
+                        }
+                      </select>
+                    </div>
+
+                    <div class="leg-form-group">
+                      <label class="leg-form-label">{{ calculatorService.getVehicleLabel(leg.mode.type) }}</label>
+                      <select
+                        class="leg-select"
+                        [ngModel]="leg.truckType"
+                        (ngModelChange)="onLegTruckTypeChange(leg, $event)"
+                      >
+                        @for (vt of calculatorService.getVehicleTypes(leg.mode.type); track vt) {
+                          <option [value]="vt">{{ vt }}</option>
+                        }
+                      </select>
+                    </div>
+
+                    <div class="leg-form-group">
+                      <label class="leg-form-label">Fuel type</label>
+                      <select
+                        class="leg-select"
+                        [ngModel]="leg.fuelType"
+                        (ngModelChange)="onLegFuelTypeChange(leg, $event)"
+                      >
+                        @for (ft of calculatorService.fuelTypes; track ft) {
+                          <option [value]="ft">{{ ft }}</option>
+                        }
+                      </select>
+                    </div>
+
+                    <div class="leg-form-actions">
+                      <button class="btn-leg-done" (click)="onToggleEdit(leg)">Done</button>
+                      <button class="btn-leg-remove" (click)="onRemoveLeg(leg.id)">
+                        <span class="material-icons">delete_outline</span>
+                      </button>
+                    </div>
+                  </div>
+                } @else {
+                  <!-- View mode -->
+                  <div class="timeline-row">
+                    <span class="leg-mode">{{ leg.mode.type }}</span>
+                    <span class="material-icons edit-icon" (click)="onToggleEdit(leg)">edit</span>
+                  </div>
+                  @if (leg.truckType) {
+                    <div class="leg-detail">
+                      <span class="detail-label">{{ calculatorService.getVehicleLabel(leg.mode.type) }}</span>
+                      <span class="detail-value">{{ leg.truckType }}</span>
+                    </div>
+                  }
+                  @if (leg.fuelType) {
+                    <div class="leg-detail">
+                      <span class="detail-label">Fuel type</span>
+                      <span class="detail-value">{{ leg.fuelType }}</span>
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+
+            <div class="timeline-line"></div>
+
+            <!-- Destination -->
+            <div class="timeline-item destination">
+              <div class="timeline-dot dest-dot"></div>
+              <div class="timeline-content">
+                <div class="timeline-row">
+                  <span>{{ formatNumber(leg.distance) }} km</span>
+                  <span class="material-icons edit-icon" (click)="onToggleEdit(leg)">edit</span>
+                </div>
+              </div>
+            </div>
+          }
+
+          <div class="timeline-line dashed"></div>
+
+          <!-- Add Leg -->
+          <div class="timeline-item add-leg" (click)="onAddLeg()">
+            <div class="timeline-dot add-dot">
+              <span class="material-icons">add</span>
+            </div>
+            <span class="add-leg-text">Add another leg</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Content -->
+    <main class="main-content">
+      <div class="tab-bar">
+        <button class="tab active">Results</button>
+      </div>
+
+      <!-- Emissions Summary -->
+      <section class="emissions-summary">
+        <h2>Emissions summary</h2>
+
+        <div class="emissions-header">
+          <div>
+            <span class="emissions-label">Emissions (CO₂e)</span>
+            <div class="emissions-value">{{ result().totalEmissions | number:'1.2-2' }} kg</div>
+          </div>
+        </div>
+
+        <div class="emissions-metrics">
+          <div class="metric">
+            <span class="metric-label">Activity</span>
+            <span class="metric-value">{{ result().activity | number:'1.2-2' }} t-km</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Intensity (CO₂e/t-km)</span>
+            <span class="metric-value">{{ result().intensity }} kg</span>
+          </div>
+        </div>
+      </section>
+
+      <hr class="section-divider" />
+
+      <!-- Activity - Leg Cards -->
+      <section class="activity-legs">
+        <h2>Activity</h2>
+
+        <div class="leg-cards">
+          @for (leg of legs(); track leg.id) {
+            <div class="leg-card">
+              <div class="leg-card-left">
+                <span class="material-icons leg-card-icon">{{ getModeIcon(leg.mode.type) }}</span>
+                <div class="leg-card-info">
+                  <span class="leg-card-title">{{ leg.mode.type }} movement</span>
+                  <span class="leg-card-distance">{{ formatNumber(leg.distance) }} km</span>
+                  @if (leg.fuelType) {
+                    <span class="leg-card-fuel">{{ leg.fuelType }}</span>
+                  }
+                </div>
+              </div>
+              <div class="leg-card-right">
+                <span class="leg-card-emission">{{ calculatorService.getLegEmission(leg) | number:'1.2-2' }} kg</span>
+                <span class="leg-card-emission-label">Emissions (CO₂e)</span>
+              </div>
+              <span class="material-icons leg-card-chevron">chevron_right</span>
+            </div>
+          }
+        </div>
+      </section>
+
+      <hr class="section-divider" />
+
+      <!-- Emissions Breakdown -->
+      <section class="emissions-breakdown">
+        <div class="breakdown-header">
+          <h2>Emissions</h2>
+        </div>
+
+        <div class="stacked-bar">
+          <div class="bar-segment wtt" [style.width.%]="result().wellToTankPercent"></div>
+          <div class="bar-segment ttw" [style.width.%]="result().tankToWheelPercent"></div>
+        </div>
+
+      </section>
+    </main>
+  </div>
+</div>

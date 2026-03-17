@@ -1,0 +1,49 @@
+<div class="stepper">
+  <!-- Step 1: Cargo Details -->
+  <div class="step" [class.active]="calculatorService.currentStep() === 1" [class.completed]="calculatorService.currentStep() > 1">
+    <div class="step-header" (click)="toggleStep(1)">
+      <span class="step-label">Step 1 / {{ calculatorService.totalSteps }}</span>
+      <div class="step-arrows">
+        <span class="material-icons">expand_less</span>
+        <span class="material-icons">expand_more</span>
+      </div>
+    </div>
+    @if (calculatorService.currentStep() === 1) {
+      <div class="step-content">
+        <app-cargo-details />
+      </div>
+    }
+  </div>
+
+  <!-- Step 2: Route Shipment -->
+  <div class="step" [class.active]="calculatorService.currentStep() === 2" [class.completed]="calculatorService.currentStep() > 2">
+    <div class="step-header" (click)="toggleStep(2)">
+      <span class="step-label">Step 2 / {{ calculatorService.totalSteps }}</span>
+      <div class="step-arrows">
+        <span class="material-icons">expand_less</span>
+        <span class="material-icons">expand_more</span>
+      </div>
+    </div>
+    @if (calculatorService.currentStep() === 2) {
+      <div class="step-content">
+        <app-route-shipment />
+      </div>
+    }
+  </div>
+
+  <!-- Step 3: Mode of Transport -->
+  <div class="step" [class.active]="calculatorService.currentStep() === 3" [class.completed]="calculatorService.currentStep() > 3">
+    <div class="step-header" (click)="toggleStep(3)">
+      <span class="step-label">Step 3 / {{ calculatorService.totalSteps }}</span>
+      <div class="step-arrows">
+        <span class="material-icons">expand_less</span>
+        <span class="material-icons">expand_more</span>
+      </div>
+    </div>
+    @if (calculatorService.currentStep() === 3) {
+      <div class="step-content">
+        <app-mode-of-transport />
+      </div>
+    }
+  </div>
+</div>

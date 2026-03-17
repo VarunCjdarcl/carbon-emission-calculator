@@ -1,0 +1,31 @@
+<div class="cargo-details">
+  <h2 class="section-title">Cargo details</h2>
+  <p class="section-desc">Tell us about the weight and type of cargo.</p>
+
+  <div class="form-group">
+    <label class="form-label">Weight</label>
+    <div class="input-row">
+      <input
+        type="number"
+        class="form-input"
+        [ngModel]="amount"
+        (input)="onInputChange($event)"
+        placeholder="0"
+        min="0"
+        [max]="unit === 'TON' ? 99.99 : null"
+        [step]="unit === 'TON' ? 0.01 : 1"
+      />
+      <select class="unit-select" [(ngModel)]="unit" (ngModelChange)="onUnitChange()">
+        <option value="KG">KG</option>
+        <option value="TON">TON</option>
+      </select>
+    </div>
+    @if (unit === 'TON') {
+      <span class="hint-text">Max: 99.99 TON (format: 00.00)</span>
+    }
+  </div>
+
+  <button class="btn-primary" (click)="onNext()" [disabled]="!isValid">
+    Next
+  </button>
+</div>

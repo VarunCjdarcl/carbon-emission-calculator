@@ -1,0 +1,24 @@
+<div class="mode-of-transport">
+  <h2 class="section-title">Mode of transport</h2>
+  <p class="section-desc">
+    Choose how you will move your cargo. You can provide details about the type of
+    transportation and its features after this step.
+  </p>
+
+  <div class="transport-cards">
+    @for (mode of availableModes; track mode.type) {
+      <div
+        class="transport-card"
+        [class.selected]="selectedMode.type === mode.type"
+        (click)="selectMode(mode)"
+      >
+        <span class="card-label">{{ mode.type }}</span>
+        <span class="material-icons card-icon">{{ mode.icon }}</span>
+      </div>
+    }
+  </div>
+
+  <button class="btn-primary" (click)="onCalculateTKM()">
+    Calculate TKM
+  </button>
+</div>
