@@ -1,6 +1,6 @@
 export interface CargoDetails {
   amount: number;
-  unit: 'KG' | 'TON';
+  unit: 'KG' | 'TON' | 'MT';
 }
 
 export interface RouteDetails {
@@ -32,6 +32,15 @@ export interface EmissionResult {
   wellToTankPercent: number;
   tankToWheel: number;
   tankToWheelPercent: number;
+}
+
+export interface LegEmissionResult {
+  carbonEmissionValue: number;
+  WTT: number;
+  TTW: number;
+  WTW: number;
+  aversionValue?: number;
+  totalCarbonEmission: number;
 }
 
 export interface ShipmentData {

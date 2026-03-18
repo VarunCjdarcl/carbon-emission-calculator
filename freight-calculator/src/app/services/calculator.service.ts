@@ -1,19 +1,30 @@
-import { Injectable, signal, computed } from '@angular/core';
-import { CargoDetails, RouteDetails, TransportMode, Leg, EmissionResult, ShipmentData } from '../models/calculator.model';
+import { Injectable, signal, computed, inject } from '@angular/core';
+import { CargoDetails, RouteDetails, TransportMode, Leg, EmissionResult, ShipmentData, LegEmissionResult } from '../models/calculator.model';
+import { ApiService } from './api.service';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CalculatorService {
+  private apiService = inject(ApiService);
+
   currentStep = signal<number>(1);
   totalSteps = 3;
 
-  cargo = signal<CargoDetails>({ amount: 0, unit: 'KG' });
+  cargo = signal<CargoDetails>({ amount: 0, unit: 'KG' as 'KG' | 'TON' | 'MT' });
   route = signal<RouteDetails>({ origin: '', distance: 0, distanceUnit: 'KM', startingCountry: '' });
   transport = signal<TransportMode>({ type: 'Road', icon: 'local_shipping' });
   legs = signal<Leg[]>([]);
   routeLegs = signal<Leg[]>([]);
   showResults = signal<boolean>(false);
+  loading = signal<boolean>(false);
+
+  // API-driven data
+  backendTruckTypes = signal<string[]>([]);
+  tkmValue = signal<number>(0);
+  legEmissions = signal<Map<number, LegEmissionResult>>(new Map());
+  totalCarbonEmission = signal<number>(0);
 
   transportModes: TransportMode[] = [
     { type: 'Road', icon: 'local_shipping' },
@@ -23,41 +34,58 @@ export class CalculatorService {
     { type: 'Sea', icon: 'sailing' }
   ];
 
+  availableModes: TransportMode[] = [
+    { type: 'Road', icon: 'local_shipping' },
+    { type: 'Rail', icon: 'train' }
+  ];
+
   tkm = computed(() => {
-    const cargoData = this.cargo();
-    const routeData = this.route();
-    const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount;
-    const distanceInKm = routeData.distanceUnit === 'MI' ? routeData.distance * 1.60934 : routeData.distance;
-    return weightInTonnes * distanceInKm;
+    return this.tkmValue();
   });
 
   emissionResult = computed<EmissionResult>(() => {
-    const tkmValue = this.tkm();
-    const mode = this.transport();
+    const emissions = this.legEmissions();
+    const tkmVal = this.tkmValue();
 
-    const factors: Record<string, number> = {
-      'Road': 0.123,
-      'Rail': 0.028,
-      'Air': 0.602,
-      'Inland Waterway': 0.031,
-      'Sea': 0.008
-    };
+    let totalWTT = 0;
+    let totalTTW = 0;
+    let totalEmissions = 0;
 
-    const factor = factors[mode.type] || 0.123;
-    const totalEmissions = tkmValue * factor;
-    const wellToTankPercent = 22.77;
-    const tankToWheelPercent = 100 - wellToTankPercent;
+    emissions.forEach((e) => {
+      totalWTT += e.WTT;
+      totalTTW += e.TTW;
+      totalEmissions += e.carbonEmissionValue;
+    });
+
+    const total = totalWTT + totalTTW;
+    const wttPercent = total > 0 ? (totalWTT / total) * 100 : 22.77;
+    const ttwPercent = total > 0 ? (totalTTW / total) * 100 : 77.23;
 
     return {
-      totalEmissions: Math.round(totalEmissions * 100) / 100,
-      activity: Math.round(tkmValue * 100) / 100,
-      intensity: factor,
-      wellToTank: Math.round(totalEmissions * (wellToTankPercent / 100) * 100) / 100,
-      wellToTankPercent,
-      tankToWheel: Math.round(totalEmissions * (tankToWheelPercent / 100) * 100) / 100,
-      tankToWheelPercent
+      totalEmissions: Math.round(totalEmissions * 1000) / 1000,
+      activity: Math.round(tkmVal * 1000) / 1000,
+      intensity: tkmVal > 0 ? Math.round((totalEmissions / tkmVal) * 1000) / 1000 : 0,
+      wellToTank: Math.round(totalWTT * 1000) / 1000,
+      wellToTankPercent: Math.round(wttPercent * 100) / 100,
+      tankToWheel: Math.round(totalTTW * 1000) / 1000,
+      tankToWheelPercent: Math.round(ttwPercent * 100) / 100
     };
   });
+
+  constructor() {
+    this.loadTruckTypes();
+  }
+
+  async loadTruckTypes(): Promise<void> {
+    try {
+      const res = await firstValueFrom(this.apiService.getTruckTypes());
+      if (res.status === 200 && res.truckTypes) {
+        this.backendTruckTypes.set(res.truckTypes);
+      }
+    } catch (err) {
+      console.error('Failed to load truck types:', err);
+    }
+  }
 
   nextStep(): void {
     if (this.currentStep() < this.totalSteps) {
@@ -77,8 +105,12 @@ export class CalculatorService {
     }
   }
 
-  truckTypes = ['Truck', 'Light Commercial Vehicle', 'Heavy Truck', 'Trailer Truck'];
-  fuelTypes = ['Diesel', 'Petrol', 'Electric', 'CNG', 'LNG', 'Hybrid'];
+  // Backend fuel types for Road mode
+  roadFuelTypes = ['Diesel', 'CNG', 'LNG', 'Electric', 'Hydrogen'];
+  // Backend fuel types for Rail mode
+  railFuelTypes = ['Diesel', 'Electric'];
+
+  fuelTypes = ['Diesel', 'CNG', 'LNG', 'Electric', 'Hydrogen'];
 
   railTypes = ['Freight Train', 'Intermodal'];
   airTypes = ['Cargo Aircraft', 'Belly Freight'];
@@ -87,12 +119,20 @@ export class CalculatorService {
 
   getVehicleTypes(modeType: string): string[] {
     switch (modeType) {
-      case 'Road': return this.truckTypes;
+      case 'Road': return this.backendTruckTypes().length > 0 ? this.backendTruckTypes() : ['Truck - Rigid (HDV >31.0 t GVW)'];
       case 'Rail': return this.railTypes;
       case 'Air': return this.airTypes;
       case 'Sea': return this.seaTypes;
       case 'Inland Waterway': return this.waterwayTypes;
-      default: return this.truckTypes;
+      default: return this.backendTruckTypes();
+    }
+  }
+
+  getFuelTypesForMode(modeType: string): string[] {
+    switch (modeType) {
+      case 'Road': return this.roadFuelTypes;
+      case 'Rail': return this.railFuelTypes;
+      default: return this.fuelTypes;
     }
   }
 
@@ -107,40 +147,184 @@ export class CalculatorService {
     }
   }
 
-  emissionFactors: Record<string, number> = {
-    'Road': 0.123,
-    'Rail': 0.028,
-    'Air': 0.602,
-    'Inland Waterway': 0.031,
-    'Sea': 0.008
-  };
-
-  getLegEmission(leg: Leg): number {
-    const cargoData = this.cargo();
-    const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount;
-    const factor = this.emissionFactors[leg.mode.type] || 0.123;
-    return Math.round(weightInTonnes * leg.distance * factor * 100) / 100;
+  // Map frontend mode to backend mode
+  private mapMode(frontendMode: string): string {
+    switch (frontendMode) {
+      case 'Road': return 'ByRoad';
+      case 'Rail': return 'ByTrain';
+      default: return 'ByRoad';
+    }
   }
 
-  calculateTKM(): void {
+  // Map frontend fuel type to backend fuel type
+  private mapFuelType(frontendFuel: string): string {
+    switch (frontendFuel) {
+      case 'Diesel': return 'diesel';
+      case 'CNG': return 'cng only';
+      case 'LNG': return 'lng';
+      case 'Electric': return 'electric';
+      case 'Hydrogen': return 'hydrogen';
+      default: return 'diesel';
+    }
+  }
+
+  // Extract a representative weight (in tonnes) from the truck type name
+  private extractWeightFromTruckType(truckType: string): number {
+    // Match patterns like "25.0-31.0", "14-24", ">31.0", ">49.0", "<3.5"
+    const rangeMatch = truckType.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*t/);
+    if (rangeMatch) {
+      const low = parseFloat(rangeMatch[1]);
+      const high = parseFloat(rangeMatch[2]);
+      return (low + high) / 2;
+    }
+
+    const gtMatch = truckType.match(/>\s*(\d+\.?\d*)\s*t/);
+    if (gtMatch) {
+      return parseFloat(gtMatch[1]) + 5;
+    }
+
+    const ltMatch = truckType.match(/<\s*(\d+\.?\d*)\s*t/);
+    if (ltMatch) {
+      return parseFloat(ltMatch[1]) - 0.5;
+    }
+
+    const upToMatch = truckType.match(/up to\s*(\d+\.?\d*)\s*t/i);
+    if (upToMatch) {
+      return parseFloat(upToMatch[1]) - 1;
+    }
+
+    const aboveMatch = truckType.match(/above\s*(\d+\.?\d*)\s*t/i);
+    if (aboveMatch) {
+      return parseFloat(aboveMatch[1]) + 5;
+    }
+
+    return 25; // default fallback
+  }
+
+  async calculateTKM(): Promise<void> {
+    const cargoData = this.cargo();
     const routeData = this.route();
     const transportData = this.transport();
     const existingRouteLegs = this.routeLegs();
 
-    if (existingRouteLegs.length > 0) {
-      this.legs.set(existingRouteLegs);
+    // Convert weight to tonnes for backend
+    const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount; // TON and MT are both tonnes
+    const distanceInKm = routeData.distanceUnit === 'MI' ? routeData.distance * 1.60934 : routeData.distance;
+
+    this.loading.set(true);
+
+    try {
+      // Call backend /calculateTKM
+      const tkmRes = await firstValueFrom(this.apiService.calculateTKM({
+        weight: weightInTonnes,
+        distance: distanceInKm,
+        mode: this.mapMode(transportData.type)
+      }));
+
+      if (tkmRes.status === 200 && tkmRes.shipmentDetails) {
+        this.tkmValue.set(parseFloat(tkmRes.shipmentDetails.tkm));
+      }
+
+      // Set up legs
+      const defaultTruckType = transportData.type === 'Road'
+        ? (this.backendTruckTypes().length > 0 ? this.backendTruckTypes()[0] : 'Truck - Rigid (HDV >31.0 t GVW)')
+        : this.railTypes[0];
+
+      const defaultFuelType = transportData.type === 'Road' ? 'Diesel' : 'Diesel';
+
+      if (existingRouteLegs.length > 0) {
+        this.legs.set(existingRouteLegs);
+      } else {
+        this.legs.set([{
+          id: 1,
+          mode: transportData,
+          distance: distanceInKm,
+          truckType: defaultTruckType,
+          fuelType: defaultFuelType,
+          editing: false
+        }]);
+      }
+
+      // Calculate emission for the first leg
+      await this.calculateAllLegEmissions();
+
+      this.showResults.set(true);
+    } catch (err) {
+      console.error('Error calculating TKM:', err);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async calculateLegEmission(leg: Leg): Promise<LegEmissionResult | null> {
+    const cargoData = this.cargo();
+    const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount;
+    const legTkm = weightInTonnes * leg.distance;
+    const backendMode = this.mapMode(leg.mode.type);
+    const backendFuel = this.mapFuelType(leg.fuelType || 'Diesel');
+
+    // For Road mode, extract vehicle weight from truck type
+    let vehicleWeight: number;
+    if (leg.mode.type === 'Road') {
+      vehicleWeight = this.extractWeightFromTruckType(leg.truckType || '');
     } else {
-      this.legs.set([{
-        id: 1,
-        mode: transportData,
-        distance: routeData.distance,
-        truckType: this.getVehicleTypes(transportData.type)[0],
-        fuelType: 'Diesel',
-        editing: false
-      }]);
+      vehicleWeight = weightInTonnes;
     }
 
-    this.showResults.set(true);
+    try {
+      const res = await firstValueFrom(this.apiService.calculateCarbonEmission({
+        tkm: legTkm,
+        mode: backendMode,
+        fuelType: backendFuel,
+        vehicleType: leg.truckType || 'Truck',
+        weight: vehicleWeight,
+        previousCarbonEmission: 0
+      }));
+
+      if (res.status === 200 && res.responseData) {
+        const data = res.responseData;
+        return {
+          carbonEmissionValue: parseFloat(data.carbonEmissionValue) || 0,
+          WTT: parseFloat(data.WTT || '0'),
+          TTW: parseFloat(data.TTW || '0'),
+          WTW: parseFloat(data.WTW || '0'),
+          aversionValue: data.aversionValue ? parseFloat(data.aversionValue) : undefined,
+          totalCarbonEmission: parseFloat(data.totalCarbonEmission) || 0
+        };
+      }
+    } catch (err) {
+      console.error('Error calculating emission for leg:', leg.id, err);
+    }
+    return null;
+  }
+
+  async calculateAllLegEmissions(): Promise<void> {
+    const currentLegs = this.legs();
+    const newEmissions = new Map<number, LegEmissionResult>();
+    let cumulativeEmission = 0;
+
+    for (const leg of currentLegs) {
+      if (leg.distance <= 0) continue;
+
+      const result = await this.calculateLegEmission(leg);
+      if (result) {
+        cumulativeEmission += result.carbonEmissionValue;
+        newEmissions.set(leg.id, result);
+      }
+    }
+
+    this.legEmissions.set(newEmissions);
+    this.totalCarbonEmission.set(cumulativeEmission);
+  }
+
+  getLegEmission(leg: Leg): number {
+    const emissions = this.legEmissions();
+    const legResult = emissions.get(leg.id);
+    return legResult ? legResult.carbonEmissionValue : 0;
+  }
+
+  getLegEmissionResult(leg: Leg): LegEmissionResult | undefined {
+    return this.legEmissions().get(leg.id);
   }
 
   addLeg(): void {
@@ -149,19 +333,38 @@ export class CalculatorService {
       id: currentLegs.length + 1,
       mode: { type: 'Road', icon: 'local_shipping' },
       distance: 0,
-      truckType: 'Truck',
+      truckType: this.backendTruckTypes().length > 0 ? this.backendTruckTypes()[0] : 'Truck - Rigid (HDV >31.0 t GVW)',
       fuelType: 'Diesel',
       editing: true
     };
     this.legs.update(legs => [...legs, newLeg]);
   }
 
-  updateLeg(updatedLeg: Leg): void {
+  async updateLeg(updatedLeg: Leg): Promise<void> {
     this.legs.update(legs => legs.map(l => l.id === updatedLeg.id ? updatedLeg : l));
+
+    // Recalculate emissions if leg is no longer editing and has valid distance
+    if (!updatedLeg.editing && updatedLeg.distance > 0) {
+      // Recalculate TKM based on total distance
+      const cargoData = this.cargo();
+      const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount;
+      const totalDistance = this.legs().reduce((sum, l) => sum + l.distance, 0);
+      this.tkmValue.set(parseFloat((weightInTonnes * totalDistance).toFixed(3)));
+
+      await this.calculateAllLegEmissions();
+    }
   }
 
-  removeLeg(id: number): void {
+  async removeLeg(id: number): Promise<void> {
     this.legs.update(legs => legs.filter(l => l.id !== id));
+
+    // Recalculate
+    const cargoData = this.cargo();
+    const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount;
+    const totalDistance = this.legs().reduce((sum, l) => sum + l.distance, 0);
+    this.tkmValue.set(parseFloat((weightInTonnes * totalDistance).toFixed(3)));
+
+    await this.calculateAllLegEmissions();
   }
 
   restart(): void {
@@ -172,6 +375,9 @@ export class CalculatorService {
     this.legs.set([]);
     this.routeLegs.set([]);
     this.showResults.set(false);
+    this.tkmValue.set(0);
+    this.legEmissions.set(new Map());
+    this.totalCarbonEmission.set(0);
   }
 
   getShipmentData(): ShipmentData {

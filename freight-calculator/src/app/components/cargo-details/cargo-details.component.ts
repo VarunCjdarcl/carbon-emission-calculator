@@ -10,7 +10,7 @@ import { CalculatorService } from '../../services/calculator.service';
 })
 export class CargoDetailsComponent {
   amount: number | null = null;
-  unit: 'KG' | 'TON' = 'KG';
+  unit: 'KG' | 'TON' | 'MT' = 'KG';
 
   constructor(private calculatorService: CalculatorService) {
     const cargo = this.calculatorService.cargo();
@@ -22,7 +22,7 @@ export class CargoDetailsComponent {
     const input = event.target as HTMLInputElement;
     let value = input.value;
 
-    if (this.unit === 'TON') {
+    if (this.unit === 'TON' || this.unit === 'MT') {
       // Remove anything that's not a digit or dot
       value = value.replace(/[^0-9.]/g, '');
 
@@ -58,7 +58,7 @@ export class CargoDetailsComponent {
   }
 
   onUnitChange(): void {
-    if (this.unit === 'TON' && this.amount !== null && this.amount > 99.99) {
+    if ((this.unit === 'TON' || this.unit === 'MT') && this.amount !== null && this.amount > 99.99) {
       this.amount = 99.99;
     }
   }

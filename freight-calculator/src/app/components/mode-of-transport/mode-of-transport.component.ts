@@ -24,7 +24,7 @@ export class ModeOfTransportComponent {
     this.calculatorService.transport.set(mode);
   }
 
-  onCalculateTKM(): void {
-    this.calculatorService.calculateTKM();
+  async onCalculateTKM(): Promise<void> {
+    await this.calculatorService.calculateTKM();
   }
 }

@@ -51,11 +51,12 @@ export class ResultsDashboardComponent {
     const mode = this.calculatorService.transportModes.find(m => m.type === modeType);
     if (mode) {
       const vehicleTypes = this.calculatorService.getVehicleTypes(modeType);
+      const fuelTypes = this.calculatorService.getFuelTypesForMode(modeType);
       this.calculatorService.updateLeg({
         ...leg,
         mode,
         truckType: vehicleTypes[0],
-        fuelType: 'Diesel'
+        fuelType: fuelTypes[0]
       });
     }
   }
@@ -66,6 +67,11 @@ export class ResultsDashboardComponent {
 
   onLegFuelTypeChange(leg: Leg, fuelType: string): void {
     this.calculatorService.updateLeg({ ...leg, fuelType });
+  }
+
+  onLegDistanceChange(leg: Leg, distance: string): void {
+    const dist = parseFloat(distance) || 0;
+    this.calculatorService.updateLeg({ ...leg, distance: dist });
   }
 
   formatNumber(value: number): string {

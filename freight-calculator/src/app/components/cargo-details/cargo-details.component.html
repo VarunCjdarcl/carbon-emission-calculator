@@ -12,16 +12,17 @@
         (input)="onInputChange($event)"
         placeholder="0"
         min="0"
-        [max]="unit === 'TON' ? 99.99 : null"
-        [step]="unit === 'TON' ? 0.01 : 1"
+        [max]="(unit === 'TON' || unit === 'MT') ? 99.99 : null"
+        [step]="(unit === 'TON' || unit === 'MT') ? 0.01 : 1"
       />
       <select class="unit-select" [(ngModel)]="unit" (ngModelChange)="onUnitChange()">
         <option value="KG">KG</option>
         <option value="TON">TON</option>
+        <option value="MT">Metric Ton</option>
       </select>
     </div>
-    @if (unit === 'TON') {
-      <span class="hint-text">Max: 99.99 TON (format: 00.00)</span>
+    @if (unit === 'TON' || unit === 'MT') {
+      <span class="hint-text">Max: 99.99 {{ unit === 'MT' ? 'Metric Ton' : 'TON' }} (format: 00.00)</span>
     }
   </div>
 

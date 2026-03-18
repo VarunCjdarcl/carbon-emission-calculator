@@ -661,3 +661,42 @@
     font-size: 13px;
   }
 }
+
+// Breakdown details
+.breakdown-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.breakdown-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+
+  &.wtt-color {
+    background: var(--navy);
+  }
+
+  &.ttw-color {
+    background: var(--red);
+  }
+}
+
+.breakdown-label {
+  color: var(--text-secondary);
+  min-width: 160px;
+}
+
+.breakdown-value {
+  font-weight: 600;
+  color: var(--navy);
+}
