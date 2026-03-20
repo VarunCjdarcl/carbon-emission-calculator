@@ -15,11 +15,19 @@ export interface TransportMode {
   icon: string;
 }
 
+export interface TruckType {
+  fullType: string;
+  vehicleType: string;
+  avgWeight: number;
+}
+
 export interface Leg {
   id: number;
   mode: TransportMode;
   distance: number;
   truckType?: string;
+  vehicleType?: string;
+  avgWeight?: number;
   fuelType?: string;
   editing: boolean;
 }

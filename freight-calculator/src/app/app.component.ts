@@ -12,4 +12,8 @@ import { CalculatorService } from './services/calculator.service';
 })
 export class AppComponent {
   constructor(public calculatorService: CalculatorService) {}
+
+  onRefresh(): void {
+    window.location.reload();
+  }
 }

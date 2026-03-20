@@ -1,6 +1,6 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { CargoDetails, RouteDetails, TransportMode, Leg, EmissionResult, ShipmentData, LegEmissionResult } from '../models/calculator.model';
-import { ApiService } from './api.service';
+import { ApiService, TruckTypeItem } from './api.service';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({
@@ -20,8 +20,14 @@ export class CalculatorService {
   showResults = signal<boolean>(false);
   loading = signal<boolean>(false);
 
+  // Session calculation limit
+  private readonly MAX_CALCULATIONS = 5;
+  calculationCount = signal<number>(0);
+  limitReached = computed(() => this.calculationCount() >= this.MAX_CALCULATIONS);
+  remainingCalculations = computed(() => this.MAX_CALCULATIONS - this.calculationCount());
+
   // API-driven data
-  backendTruckTypes = signal<string[]>([]);
+  backendTruckTypes = signal<TruckTypeItem[]>([]);
   tkmValue = signal<number>(0);
   legEmissions = signal<Map<number, LegEmissionResult>>(new Map());
   totalCarbonEmission = signal<number>(0);
@@ -119,13 +125,17 @@ export class CalculatorService {
 
   getVehicleTypes(modeType: string): string[] {
     switch (modeType) {
-      case 'Road': return this.backendTruckTypes().length > 0 ? this.backendTruckTypes() : ['Truck - Rigid (HDV >31.0 t GVW)'];
+      case 'Road': return this.backendTruckTypes().length > 0 ? this.backendTruckTypes().map(t => t.fullType) : ['Truck - Rigid (HDV >31.0 t GVW)'];
       case 'Rail': return this.railTypes;
       case 'Air': return this.airTypes;
       case 'Sea': return this.seaTypes;
       case 'Inland Waterway': return this.waterwayTypes;
-      default: return this.backendTruckTypes();
+      default: return this.backendTruckTypes().map(t => t.fullType);
     }
+  }
+
+  getTruckTypeByFullType(fullType: string): TruckTypeItem | undefined {
+    return this.backendTruckTypes().find(t => t.fullType === fullType);
   }
 
   getFuelTypesForMode(modeType: string): string[] {
@@ -168,40 +178,11 @@ export class CalculatorService {
     }
   }
 
-  // Extract a representative weight (in tonnes) from the truck type name
-  private extractWeightFromTruckType(truckType: string): number {
-    // Match patterns like "25.0-31.0", "14-24", ">31.0", ">49.0", "<3.5"
-    const rangeMatch = truckType.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*t/);
-    if (rangeMatch) {
-      const low = parseFloat(rangeMatch[1]);
-      const high = parseFloat(rangeMatch[2]);
-      return (low + high) / 2;
-    }
-
-    const gtMatch = truckType.match(/>\s*(\d+\.?\d*)\s*t/);
-    if (gtMatch) {
-      return parseFloat(gtMatch[1]) + 5;
-    }
-
-    const ltMatch = truckType.match(/<\s*(\d+\.?\d*)\s*t/);
-    if (ltMatch) {
-      return parseFloat(ltMatch[1]) - 0.5;
-    }
-
-    const upToMatch = truckType.match(/up to\s*(\d+\.?\d*)\s*t/i);
-    if (upToMatch) {
-      return parseFloat(upToMatch[1]) - 1;
-    }
-
-    const aboveMatch = truckType.match(/above\s*(\d+\.?\d*)\s*t/i);
-    if (aboveMatch) {
-      return parseFloat(aboveMatch[1]) + 5;
-    }
-
-    return 25; // default fallback
-  }
-
   async calculateTKM(): Promise<void> {
+    if (this.limitReached()) {
+      return;
+    }
+
     const cargoData = this.cargo();
     const routeData = this.route();
     const transportData = this.transport();
@@ -226,8 +207,9 @@ export class CalculatorService {
       }
 
       // Set up legs
+      const defaultTruckObj = this.backendTruckTypes().length > 0 ? this.backendTruckTypes()[0] : null;
       const defaultTruckType = transportData.type === 'Road'
-        ? (this.backendTruckTypes().length > 0 ? this.backendTruckTypes()[0] : 'Truck - Rigid (HDV >31.0 t GVW)')
+        ? (defaultTruckObj ? defaultTruckObj.fullType : 'Truck - Rigid (HDV >31.0 t GVW)')
         : this.railTypes[0];
 
       const defaultFuelType = transportData.type === 'Road' ? 'Diesel' : 'Diesel';
@@ -240,6 +222,8 @@ export class CalculatorService {
           mode: transportData,
           distance: distanceInKm,
           truckType: defaultTruckType,
+          vehicleType: defaultTruckObj?.vehicleType,
+          avgWeight: defaultTruckObj?.avgWeight,
           fuelType: defaultFuelType,
           editing: false
         }]);
@@ -248,6 +232,7 @@ export class CalculatorService {
       // Calculate emission for the first leg
       await this.calculateAllLegEmissions();
 
+      this.calculationCount.update(c => c + 1);
       this.showResults.set(true);
     } catch (err) {
       console.error('Error calculating TKM:', err);
@@ -256,29 +241,25 @@ export class CalculatorService {
     }
   }
 
-  async calculateLegEmission(leg: Leg): Promise<LegEmissionResult | null> {
+  async calculateLegEmission(leg: Leg, previousCarbonEmission: number = 0): Promise<LegEmissionResult | null> {
     const cargoData = this.cargo();
     const weightInTonnes = cargoData.unit === 'KG' ? cargoData.amount / 1000 : cargoData.amount;
     const legTkm = weightInTonnes * leg.distance;
     const backendMode = this.mapMode(leg.mode.type);
     const backendFuel = this.mapFuelType(leg.fuelType || 'Diesel');
 
-    // For Road mode, extract vehicle weight from truck type
-    let vehicleWeight: number;
-    if (leg.mode.type === 'Road') {
-      vehicleWeight = this.extractWeightFromTruckType(leg.truckType || '');
-    } else {
-      vehicleWeight = weightInTonnes;
-    }
+    // Use vehicleType and avgWeight from the truck type object
+    const vehicleType = leg.vehicleType || 'Rigid';
+    const vehicleWeight = leg.avgWeight ?? weightInTonnes;
 
     try {
       const res = await firstValueFrom(this.apiService.calculateCarbonEmission({
         tkm: legTkm,
         mode: backendMode,
         fuelType: backendFuel,
-        vehicleType: leg.truckType || 'Truck',
+        vehicleType: vehicleType,
         weight: vehicleWeight,
-        previousCarbonEmission: 0
+        previousCarbonEmission
       }));
 
       if (res.status === 200 && res.responseData) {
@@ -306,7 +287,7 @@ export class CalculatorService {
     for (const leg of currentLegs) {
       if (leg.distance <= 0) continue;
 
-      const result = await this.calculateLegEmission(leg);
+      const result = await this.calculateLegEmission(leg, cumulativeEmission);
       if (result) {
         cumulativeEmission += result.carbonEmissionValue;
         newEmissions.set(leg.id, result);
@@ -329,11 +310,14 @@ export class CalculatorService {
 
   addLeg(): void {
     const currentLegs = this.legs();
+    const defaultTruckObj = this.backendTruckTypes().length > 0 ? this.backendTruckTypes()[0] : null;
     const newLeg: Leg = {
       id: currentLegs.length + 1,
       mode: { type: 'Road', icon: 'local_shipping' },
       distance: 0,
-      truckType: this.backendTruckTypes().length > 0 ? this.backendTruckTypes()[0] : 'Truck - Rigid (HDV >31.0 t GVW)',
+      truckType: defaultTruckObj ? defaultTruckObj.fullType : 'Truck - Rigid (HDV >31.0 t GVW)',
+      vehicleType: defaultTruckObj?.vehicleType,
+      avgWeight: defaultTruckObj?.avgWeight,
       fuelType: 'Diesel',
       editing: true
     };

@@ -52,17 +52,26 @@ export class ResultsDashboardComponent {
     if (mode) {
       const vehicleTypes = this.calculatorService.getVehicleTypes(modeType);
       const fuelTypes = this.calculatorService.getFuelTypesForMode(modeType);
+      const truckObj = modeType === 'Road' ? this.calculatorService.getTruckTypeByFullType(vehicleTypes[0]) : undefined;
       this.calculatorService.updateLeg({
         ...leg,
         mode,
         truckType: vehicleTypes[0],
+        vehicleType: truckObj?.vehicleType,
+        avgWeight: truckObj?.avgWeight,
         fuelType: fuelTypes[0]
       });
     }
   }
 
   onLegTruckTypeChange(leg: Leg, truckType: string): void {
-    this.calculatorService.updateLeg({ ...leg, truckType });
+    const truckObj = this.calculatorService.getTruckTypeByFullType(truckType);
+    this.calculatorService.updateLeg({
+      ...leg,
+      truckType,
+      vehicleType: truckObj?.vehicleType,
+      avgWeight: truckObj?.avgWeight
+    });
   }
 
   onLegFuelTypeChange(leg: Leg, fuelType: string): void {

@@ -1,5 +1,21 @@
 @if (calculatorService.showResults()) {
   <app-results-dashboard />
+} @else if (calculatorService.limitReached()) {
+  <div class="calculator-wrapper">
+    <app-header />
+    <div class="calculator-body">
+      <div class="limit-reached-screen">
+        <span class="material-icons limit-icon">block</span>
+        <h2>Session Limit Reached</h2>
+        <p>You have used all 5 calculations allowed in this session.</p>
+        <p>Please refresh the page to start a new session.</p>
+        <button class="btn-refresh" (click)="onRefresh()">
+          <span class="material-icons">refresh</span>
+          Refresh Page
+        </button>
+      </div>
+    </div>
+  </div>
 } @else {
   <div class="calculator-wrapper">
     <app-header />

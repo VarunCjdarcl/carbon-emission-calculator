@@ -18,7 +18,15 @@
     }
   </div>
 
-  <button class="btn-primary" (click)="onCalculateTKM()">
-    Calculate TKM
-  </button>
+  @if (calculatorService.limitReached()) {
+    <div class="limit-warning">
+      <span class="material-icons">warning</span>
+      <p>You have reached the maximum limit of 5 calculations per session. Please refresh the page to start a new session.</p>
+    </div>
+  } @else {
+    <button class="btn-primary" (click)="onCalculateTKM()">
+      Calculate TKM
+    </button>
+    <p class="calculations-remaining">{{ calculatorService.remainingCalculations() }} calculation(s) remaining in this session</p>
+  }
 </div>
