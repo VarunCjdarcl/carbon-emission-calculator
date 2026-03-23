@@ -20,11 +20,11 @@ export class CalculatorService {
   showResults = signal<boolean>(false);
   loading = signal<boolean>(false);
 
-  // Session calculation limit
-  private readonly MAX_CALCULATIONS = 5;
+  // IP-based calculation limit (from backend)
+  private readonly MAX_CALCULATIONS = 10;
   calculationCount = signal<number>(0);
-  limitReached = computed(() => this.calculationCount() >= this.MAX_CALCULATIONS);
-  remainingCalculations = computed(() => this.MAX_CALCULATIONS - this.calculationCount());
+  remainingCalculations = signal<number>(10);
+  limitReached = signal<boolean>(false);
 
   // API-driven data
   backendTruckTypes = signal<TruckTypeItem[]>([]);
@@ -80,6 +80,20 @@ export class CalculatorService {
 
   constructor() {
     this.loadTruckTypes();
+    this.loadLimit();
+  }
+
+  async loadLimit(): Promise<void> {
+    try {
+      const res = await firstValueFrom(this.apiService.checkLimit());
+      if (res.status === 200) {
+        this.remainingCalculations.set(res.remaining);
+        this.limitReached.set(res.limitReached);
+        this.calculationCount.set(res.maxCalculations - res.remaining);
+      }
+    } catch (err) {
+      console.error('Failed to check limit:', err);
+    }
   }
 
   async loadTruckTypes(): Promise<void> {
@@ -202,8 +216,19 @@ export class CalculatorService {
         mode: this.mapMode(transportData.type)
       }));
 
+      if (tkmRes.status === 429) {
+        this.limitReached.set(true);
+        this.remainingCalculations.set(0);
+        return;
+      }
+
       if (tkmRes.status === 200 && tkmRes.shipmentDetails) {
         this.tkmValue.set(parseFloat(tkmRes.shipmentDetails.tkm));
+        if (tkmRes.remaining !== undefined) {
+          this.remainingCalculations.set(tkmRes.remaining);
+          this.limitReached.set(tkmRes.limitReached ?? false);
+          this.calculationCount.set(this.MAX_CALCULATIONS - tkmRes.remaining);
+        }
       }
 
       // Set up legs
@@ -232,7 +257,6 @@ export class CalculatorService {
       // Calculate emission for the first leg
       await this.calculateAllLegEmissions();
 
-      this.calculationCount.update(c => c + 1);
       this.showResults.set(true);
     } catch (err) {
       console.error('Error calculating TKM:', err);

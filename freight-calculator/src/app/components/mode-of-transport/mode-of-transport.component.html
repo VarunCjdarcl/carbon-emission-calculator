@@ -21,14 +21,14 @@
   @if (calculatorService.limitReached()) {
     <div class="limit-warning">
       <span class="material-icons">warning</span>
-      <p>You have reached the maximum limit of 5 calculations per session. Please refresh the page to start a new session.</p>
+      <p>You have reached the maximum limit of 10 calculations for today. Please try again tomorrow.</p>
     </div>
   } @else {
     <button class="btn-primary" (click)="onCalculateTKM()">
       Calculate TKM
     </button>
     @if (calculatorService.calculationCount() > 0) {
-      <p class="calculations-remaining">{{ calculatorService.remainingCalculations() }} calculation(s) remaining in this session</p>
+      <p class="calculations-remaining">{{ calculatorService.remainingCalculations() }} calculation(s) remaining today</p>
     }
   }
 </div>

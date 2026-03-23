@@ -2,8 +2,8 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-// const BASE_URL = 'http://localhost:8000/carbonEmission';
-const BASE_URL = 'http://cecalculator.cjdarcl.com:8080/carbonEmission';
+const BASE_URL = 'http://localhost:8080/carbonEmission';
+// const BASE_URL = 'http://cecalculator.cjdarcl.com:8080/carbonEmission';
 
 export interface TkmRequest {
   weight: number;
@@ -19,6 +19,16 @@ export interface TkmResponse {
     mode: string;
     tkm: string;
   };
+  remaining?: number;
+  limitReached?: boolean;
+  message?: string;
+}
+
+export interface CheckLimitResponse {
+  status: number;
+  remaining: number;
+  limitReached: boolean;
+  maxCalculations: number;
   message?: string;
 }
 
@@ -77,5 +87,9 @@ export class ApiService {
 
   getTruckTypes(): Observable<TruckTypesResponse> {
     return this.http.post<TruckTypesResponse>(`${BASE_URL}/truckTypes`, {});
+  }
+
+  checkLimit(): Observable<CheckLimitResponse> {
+    return this.http.get<CheckLimitResponse>(`${BASE_URL}/checkLimit`);
   }
 }
