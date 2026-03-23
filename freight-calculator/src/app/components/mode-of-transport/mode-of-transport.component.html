@@ -27,6 +27,8 @@
     <button class="btn-primary" (click)="onCalculateTKM()">
       Calculate TKM
     </button>
-    <p class="calculations-remaining">{{ calculatorService.remainingCalculations() }} calculation(s) remaining in this session</p>
+    @if (calculatorService.calculationCount() > 0) {
+      <p class="calculations-remaining">{{ calculatorService.remainingCalculations() }} calculation(s) remaining in this session</p>
+    }
   }
 </div>
